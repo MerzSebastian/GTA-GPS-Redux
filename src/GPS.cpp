@@ -282,7 +282,11 @@ void GPS::renderPath(CVector tracePos, short color, bool friendly, short &nodesC
 			// A node outside the current zoom/pan gets clamped back into
 			// range by LimitRadarPoint() below instead of staying off-map;
 			// track that here so segments to/from it can be skipped later.
-			tmpNodeVisible[i] = tmpPoint.MagnitudeSqr() <= 1.0f;
+			// The map viewport is a square (matching LimitToMap()'s per-axis
+			// bound below), not a circle, so this has to check each axis
+			// separately - a destination at the map's true corner has
+			// magnitude > 1 but is still fully in view.
+			tmpNodeVisible[i] = std::fabs(tmpPoint.x) <= 1.0f && std::fabs(tmpPoint.y) <= 1.0f;
 			CRadar::LimitRadarPoint(tmpPoint);
 			CRadar::TransformRadarPointToScreenSpace(tmpNodePoints[i], tmpPoint);
 			// LimitToMap()'s bounds are in CRadar's native coordinate space,
