@@ -255,6 +255,17 @@ void GPS::renderPath(CVector tracePos, short color, bool friendly, short &nodesC
 		return;
 	}
 
+	// WidescreenFix draws the pause map pillarboxed to a 4:3 rect locked to
+	// screen height, not stretched across the whole screen; this falls back
+	// to the full screen automatically when it already is 4:3.
+	float mapHeight = static_cast<float>(RsGlobal.maximumHeight);
+	float mapWidth = mapHeight * (4.0f / 3.0f);
+	if (mapWidth > static_cast<float>(RsGlobal.maximumWidth))
+		mapWidth = static_cast<float>(RsGlobal.maximumWidth);
+	float mapOffsetX = (static_cast<float>(RsGlobal.maximumWidth) - mapWidth) / 2.0f;
+	float xScale = mapWidth / 640.0f;
+	float yScale = mapHeight / 448.0f;
+
 	for (unsigned short i = 0; i < nodesCount; i++)
 	{
 		currentNode = ThePaths.GetPathNode(resultNodes[i]);
@@ -264,14 +275,21 @@ void GPS::renderPath(CVector tracePos, short color, bool friendly, short &nodesC
 		if (!FrontEndMenuManager.m_bDrawRadarOrMap)
 		{
 			CRadar::TransformRadarPointToScreenSpace(tmpNodePoints[i], tmpPoint);
+			tmpNodeVisible[i] = true;
 		}
 		else
 		{
+			// A node outside the current zoom/pan gets clamped back into
+			// range by LimitRadarPoint() below instead of staying off-map;
+			// track that here so segments to/from it can be skipped later.
+			tmpNodeVisible[i] = tmpPoint.MagnitudeSqr() <= 1.0f;
 			CRadar::LimitRadarPoint(tmpPoint);
 			CRadar::TransformRadarPointToScreenSpace(tmpNodePoints[i], tmpPoint);
-			tmpNodePoints[i].x *= static_cast<float>(RsGlobal.maximumWidth) / 640.0f;
-			tmpNodePoints[i].y *= static_cast<float>(RsGlobal.maximumHeight) / 448.0f;
+			// LimitToMap()'s bounds are in CRadar's native coordinate space,
+			// not screen pixels, so it must run before the rescale below.
 			CRadar::LimitToMap(&tmpNodePoints[i].x, &tmpNodePoints[i].y);
+			tmpNodePoints[i].x = tmpNodePoints[i].x * xScale + mapOffsetX;
+			tmpNodePoints[i].y *= yScale;
 		}
 	}
 
@@ -331,8 +349,9 @@ void GPS::renderPath(CVector tracePos, short color, bool friendly, short &nodesC
 		// Only set up vertices for points visible on the radar. If the
 		// radar rect is 0 we assume the full screen map is open so we
 		// don't apply this optimization.
-		if (scissorRect.IsPointInside(tmpNodePoints[i]) ||
-			(scissorRect.bottom + scissorRect.top + scissorRect.left + scissorRect.right) == 0)
+		if ((scissorRect.IsPointInside(tmpNodePoints[i]) ||
+			 (scissorRect.bottom + scissorRect.top + scissorRect.left + scissorRect.right) == 0) &&
+			tmpNodeVisible[i] && tmpNodeVisible[i + 1])
 		{
 			util::Setup2dVertex(				 //
 				lineVerts[vertIndex + 0],		 //
