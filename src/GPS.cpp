@@ -38,12 +38,13 @@ void GPS::calculatePath(const CVector& destPosn, short &nodesCount, CNodeAddress
 	);
 }
 
-void GPS::requestTargetPath(CVector destPosn)
+void GPS::requestPath(CVector destPosn, std::future<void> &future, short &nodesCountOut, float &distanceOut,
+					  CNodeAddress *resultNodesOut)
 {
-	if (targetFuture.valid() && targetFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+	if (future.valid() && future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
 		return;
 
-	targetFuture = std::async(std::launch::async, [this, destPosn]() {
+	future = std::async(std::launch::async, [this, destPosn, &nodesCountOut, &distanceOut, resultNodesOut]() {
 		short nodesCountTemp = 0;
 		float distanceTemp = 0.0f;
 		std::array<CNodeAddress, MAX_NODE_POINTS> nodesTemp{};
@@ -51,29 +52,20 @@ void GPS::requestTargetPath(CVector destPosn)
 		this->calculatePath(destPosn, nodesCountTemp, nodesTemp.data(), distanceTemp);
 
 		std::lock_guard<std::mutex> lock(pathMutex);
-		targetNodesCount = nodesCountTemp;
-		targetDistance = distanceTemp;
-		std::copy(nodesTemp.begin(), nodesTemp.end(), t_ResultNodes.begin());
+		nodesCountOut = nodesCountTemp;
+		distanceOut = distanceTemp;
+		std::copy(nodesTemp.begin(), nodesTemp.end(), resultNodesOut);
 	});
+}
+
+void GPS::requestTargetPath(CVector destPosn)
+{
+	requestPath(destPosn, targetFuture, targetNodesCount, targetDistance, t_ResultNodes.data());
 }
 
 void GPS::requestMissionPath(CVector destPosn)
 {
-	if (missionFuture.valid() && missionFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
-		return;
-
-	missionFuture = std::async(std::launch::async, [this, destPosn]() {
-		short nodesCountTemp = 0;
-		float distanceTemp = 0.0f;
-		std::array<CNodeAddress, MAX_NODE_POINTS> nodesTemp{};
-
-		this->calculatePath(destPosn, nodesCountTemp, nodesTemp.data(), distanceTemp);
-
-		std::lock_guard<std::mutex> lock(pathMutex);
-		missionNodesCount = nodesCountTemp;
-		missionDistance = distanceTemp;
-		std::copy(nodesTemp.begin(), nodesTemp.end(), m_ResultNodes.begin());
-	});
+	requestPath(destPosn, missionFuture, missionNodesCount, missionDistance, m_ResultNodes.data());
 }
 
 // Events

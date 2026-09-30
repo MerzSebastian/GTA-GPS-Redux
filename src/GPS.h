@@ -68,6 +68,8 @@ class GPS
 	void renderMissionTrace(tRadarTrace *trace);
 	// Self explanatory.
 	void calculatePath(const CVector &destPosn, short &nodesCount, CNodeAddress *resultNodes, float &gpsDistance);
+	void requestPath(CVector destPosn, std::future<void> &future, short &nodesCountOut, float &distanceOut,
+					 CNodeAddress *resultNodesOut);
 	void requestTargetPath(CVector destPosn);
 	void requestMissionPath(CVector destPosn);
 	void renderPath(CVector tracePos, short color, bool friendly, short &nodesCount, CNodeAddress *resultNodes,
