@@ -61,6 +61,7 @@ class GPS
   private:
 	void Run();
 	void GameEventHandle();
+	tRadarTrace *getValidTargetTrace();
 	void DrawHudEventHandle();
 	void drawDistanceText(CRGBA color, float anchorY, float textYOffset, const CVector &fromPos,
 						  const CVector &toPos);

@@ -96,6 +96,18 @@ void GPS::DrawRadarOverlayHandle()
 	}
 }
 
+tRadarTrace *GPS::getValidTargetTrace()
+{
+	if (!FrontEndMenuManager.m_nTargetBlipIndex)
+		return nullptr;
+
+	tRadarTrace *trace = &CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)];
+	if (trace->m_nCounter != HIWORD(FrontEndMenuManager.m_nTargetBlipIndex) || !trace->m_nBlipDisplay)
+		return nullptr;
+
+	return trace;
+}
+
 void GPS::GameEventHandle()
 {
 	player = FindPlayerPed(0);
@@ -123,25 +135,17 @@ void GPS::GameEventHandle()
 		return;
 	}
 
-	if (FrontEndMenuManager.m_nTargetBlipIndex &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nCounter ==
-			HIWORD(FrontEndMenuManager.m_nTargetBlipIndex) &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nBlipDisplay &&
-		DistanceBetweenPoints(player->GetPosition(),
-							  CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos) <=
-			cfg.DISABLE_PROXIMITY)
+	if (tRadarTrace *trace = getValidTargetTrace();
+		trace && DistanceBetweenPoints(player->GetPosition(), trace->m_vecPos) <= cfg.DISABLE_PROXIMITY)
 	{
 		CRadar::ClearBlip(FrontEndMenuManager.m_nTargetBlipIndex);
 		FrontEndMenuManager.m_nTargetBlipIndex = 0;
 		renderTargetRoute = false;
 	}
 
-	if (FrontEndMenuManager.m_nTargetBlipIndex &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nCounter ==
-			HIWORD(FrontEndMenuManager.m_nTargetBlipIndex) &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nBlipDisplay)
+	if (tRadarTrace *trace = getValidTargetTrace())
 	{
-		targetTracePos = CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos;
+		targetTracePos = trace->m_vecPos;
 		this->requestTargetPath(targetTracePos);
 		renderTargetRoute = true;
 	}
