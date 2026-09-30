@@ -258,11 +258,12 @@ void GPS::renderPath(CVector tracePos, short color, bool friendly, short &nodesC
 	// WidescreenFix draws the pause map pillarboxed to a 4:3 rect locked to
 	// screen height, not stretched across the whole screen; this falls back
 	// to the full screen automatically when it already is 4:3.
+	float screenWidth = static_cast<float>(RsGlobal.maximumWidth);
 	float mapHeight = static_cast<float>(RsGlobal.maximumHeight);
 	float mapWidth = mapHeight * (4.0f / 3.0f);
-	if (mapWidth > static_cast<float>(RsGlobal.maximumWidth))
-		mapWidth = static_cast<float>(RsGlobal.maximumWidth);
-	float mapOffsetX = (static_cast<float>(RsGlobal.maximumWidth) - mapWidth) / 2.0f;
+	if (mapWidth > screenWidth)
+		mapWidth = screenWidth;
+	float mapOffsetX = (screenWidth - mapWidth) / 2.0f;
 	float xScale = mapWidth / 640.0f;
 	float yScale = mapHeight / 448.0f;
 
