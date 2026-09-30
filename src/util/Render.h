@@ -5,58 +5,25 @@ namespace util
 {
 	inline CRGBA SetupColor(short color, bool friendly, const struct Config& cfg)
 	{
-		CRGBA clr;
+		if (color < 0)
+			return cfg.GPS_LINE_CLR;
+
 		if (cfg.ENABLE_CUSTOM_CLRS)
 		{
-			switch (color)
-			{
-			case 0: // RED
-				clr = cfg.CC_RED;
-				break;
-			case 1: // GREEN
-				clr = cfg.CC_GREEN;
-				break;
-			case 2: // BLUE
-				clr = cfg.CC_BLUE;
-				break;
-			case 3: // WHITE
-				clr = cfg.CC_WHITE;
-				break;
-			case 4: // YELLOW
-				clr = cfg.CC_YELLOW;
-				break;
-			case 5: // PURPLE
-				clr = cfg.CC_PURPLE;
-				break;
-			case 6: // CYAN
-				clr = cfg.CC_CYAN;
-				break;
-			case 7: // Depends on whether blip is friendly.
-				if (friendly)
-				{
-					// BLUE
-					clr = cfg.CC_BLUE;
-				}
-				else
-				{
-					// RED
-					clr = cfg.CC_RED;
-				}
-				break;
-			case 8: // DESTINATION
-				clr = cfg.CC_YELLOW;
-				break;
-			}
-		}
-		else
-			clr = CRadar::GetRadarTraceColour(color, 1, friendly);
+			unsigned int lookupColor = static_cast<unsigned int>(color);
+			if (color == 7) // THREAT: blue if friendly, red otherwise
+				lookupColor = friendly ? 2u : 0u;
+			else if (color == 8 && !cfg.CUSTOM_COLORS.contains(8)) // DESTINATION defaults to yellow
+				lookupColor = 4u;
 
-		if (color < 1 || color > 8)
-		{
-			clr = cfg.GPS_LINE_CLR;
+			auto it = cfg.CUSTOM_COLORS.find(lookupColor);
+			return (it != cfg.CUSTOM_COLORS.end()) ? it->second : cfg.GPS_LINE_CLR;
 		}
 
-		return clr;
+		if (color > 8)
+			return cfg.GPS_LINE_CLR;
+
+		return CRadar::GetRadarTraceColour(color, 1, friendly);
 	}
 
 	constexpr void Setup2dVertex(RwIm2DVertex &vertex, const double x, const double y, const CRGBA &clr)
