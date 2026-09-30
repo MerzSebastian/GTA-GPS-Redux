@@ -51,7 +51,7 @@ namespace util
 		else
 			clr = CRadar::GetRadarTraceColour(color, 1, friendly);
 
-		if (color < 1 || color > 8)
+		if (color < 0 || color > 8)
 		{
 			clr = cfg.GPS_LINE_CLR;
 		}
