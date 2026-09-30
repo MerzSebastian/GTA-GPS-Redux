@@ -190,6 +190,27 @@ void GPS::GameEventHandle()
 	}
 }
 
+void GPS::drawDistanceText(CRGBA color, float anchorY, float textYOffset, const CVector &fromPos,
+						   const CVector &toPos)
+{
+	CFont::SetOrientation(ALIGN_CENTER);
+	CFont::SetColor(color);
+	CFont::SetBackground(false, false);
+	CFont::SetWrapx(500.0f);
+	CFont::SetScale(0.3f * static_cast<float>(RsGlobal.maximumWidth) / 640.0f,
+					0.6f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f);
+	CFont::SetFontStyle(FONT_SUBTITLES);
+	CFont::SetProportional(true);
+	CFont::SetDropShadowPosition(1);
+	CFont::SetDropColor(CRGBA(0, 0, 0, 180));
+
+	CVector2D point;
+	CRadar::TransformRadarPointToScreenSpace(point, CVector2D(0.0f, anchorY));
+	CFont::PrintString(
+		point.x, point.y + textYOffset * static_cast<float>(RsGlobal.maximumHeight) / 448.0f,
+		(char *)util::makeDist(DistanceBetweenPoints(fromPos, toPos), cfg.DISTANCE_UNITS).c_str());
+}
+
 void GPS::DrawHudEventHandle()
 {
 	if (!cfg.ENABLE_DISTANCE_TEXT)
@@ -200,48 +221,14 @@ void GPS::DrawHudEventHandle()
 
 	if (renderMissionRoute)
 	{
-		CFont::SetOrientation(ALIGN_CENTER);
-		CFont::SetColor(SetupColor(this->mTrace->m_nColour, this->mTrace->m_bFriendly, cfg));
-		CFont::SetBackground(false, false);
-		CFont::SetWrapx(500.0f);
-		CFont::SetScale(0.3f * static_cast<float>(RsGlobal.maximumWidth) / 640.0f,
-						0.6f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f);
-		CFont::SetFontStyle(FONT_SUBTITLES);
-		CFont::SetProportional(true);
-		CFont::SetDropShadowPosition(1);
-		CFont::SetDropColor(CRGBA(0, 0, 0, 180));
-
-		CVector2D point;
-		CRadar::TransformRadarPointToScreenSpace(point, CVector2D(0.0f, -1.0f));
-		CFont::PrintString(
-			point.x, point.y + 8.0f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f,
-			(char *)util::makeDist(DistanceBetweenPoints(FindPlayerCoors(0), destVec), cfg.DISTANCE_UNITS).c_str());
+		drawDistanceText(SetupColor(this->mTrace->m_nColour, this->mTrace->m_bFriendly, cfg), -1.0f, 8.0f,
+						 FindPlayerCoors(0), destVec);
 	}
 
 	if (renderTargetRoute)
 	{
-		CFont::SetOrientation(ALIGN_CENTER);
-		CFont::SetColor(cfg.GPS_LINE_CLR);
-
-		CFont::SetBackground(false, false);
-		CFont::SetWrapx(500.0f);
-		CFont::SetScale(0.3f * static_cast<float>(RsGlobal.maximumWidth) / 640.0f,
-						0.6f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f);
-		CFont::SetFontStyle(FONT_SUBTITLES);
-		CFont::SetProportional(true);
-		CFont::SetDropShadowPosition(1);
-		CFont::SetDropColor(CRGBA(0, 0, 0, 180));
-
-		CVector2D point;
-		CRadar::TransformRadarPointToScreenSpace(point, CVector2D(0.0f, 1.0f));
-		CFont::PrintString(
-			point.x, point.y - 20.0f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f,
-			(char *)util::makeDist(
-				DistanceBetweenPoints(
-					CVector(player->GetPosition()),
-					CVector(CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos)),
-				cfg.DISTANCE_UNITS)
-				.c_str());
+		drawDistanceText(cfg.GPS_LINE_CLR, 1.0f, -20.0f, CVector(player->GetPosition()),
+						 CVector(CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos));
 	}
 }
 
