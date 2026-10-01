@@ -1,0 +1,55 @@
+name: Unofficial Build & Release
+
+on:
+    push:
+        branches: [unofficial]
+        tags: ["unofficial-*"]
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+    build:
+        runs-on: windows-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: true
+                  fetch-depth: 0
+                  fetch-tags: true
+
+            - name: Configure
+              run: cmake -S . -B build -A Win32
+
+            - name: Build
+              run: cmake --build build --config Release
+
+            - name: Stage release files
+              shell: cmd
+              run: |
+                  mkdir dist
+                  copy build\Release\SA.GPS.REDUX.asi dist\
+                  copy build\Release\SA.GPS.CONF.ini dist\
+                  copy README.md dist\
+
+            - name: Package as zip
+              shell: pwsh
+              run: Compress-Archive -Path dist\* -DestinationPath GPS_Redux.zip
+
+            - name: Upload build artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: GPS_Redux
+                  path: GPS_Redux.zip
+
+            - name: Create GitHub Release
+              if: startsWith(github.ref, 'refs/tags/unofficial-')
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  gh release create "${{ github.ref_name }}" GPS_Redux.zip \
+                    --title "Unofficial build ${{ github.ref_name }}" \
+                    --notes-from-tag
