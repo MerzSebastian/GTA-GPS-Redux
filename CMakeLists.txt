@@ -35,7 +35,9 @@ include(FetchContent)
 if(MSVC)
     set(PLUGIN_SDK_URL "https://github.com/juicermv/plugin-sdk/releases/latest/download/msvc.zip")
     set(SIMDSTRING_URL "https://github.com/juicermv/SIMDString/releases/download/release/msvc.zip")
-    set(SIMDSTRING_SUBDIR "SIMDStringX86")
+    # The msvc.zip extracts flat (SIMDString.h/.cpp/.lib directly in the
+    # FetchContent source dir) - there is no SIMDStringX86 subdirectory.
+    set(SIMDSTRING_SUBDIR "")
 else() # Assuming MinGW or other GCC-like compiler
     set(PLUGIN_SDK_URL "https://github.com/juicermv/plugin-sdk/releases/latest/download/mingw.zip")
     set(SIMDSTRING_URL "https://github.com/juicermv/SIMDString/releases/download/release/mingw.zip")
