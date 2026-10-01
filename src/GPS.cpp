@@ -38,12 +38,13 @@ void GPS::calculatePath(const CVector& destPosn, short &nodesCount, CNodeAddress
 	);
 }
 
-void GPS::requestTargetPath(CVector destPosn)
+void GPS::requestPath(CVector destPosn, std::future<void> &future, short &nodesCountOut, float &distanceOut,
+					  CNodeAddress *resultNodesOut)
 {
-	if (targetFuture.valid() && targetFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+	if (future.valid() && future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
 		return;
 
-	targetFuture = std::async(std::launch::async, [this, destPosn]() {
+	future = std::async(std::launch::async, [this, destPosn, &nodesCountOut, &distanceOut, resultNodesOut]() {
 		short nodesCountTemp = 0;
 		float distanceTemp = 0.0f;
 		std::array<CNodeAddress, MAX_NODE_POINTS> nodesTemp{};
@@ -51,29 +52,20 @@ void GPS::requestTargetPath(CVector destPosn)
 		this->calculatePath(destPosn, nodesCountTemp, nodesTemp.data(), distanceTemp);
 
 		std::lock_guard<std::mutex> lock(pathMutex);
-		targetNodesCount = nodesCountTemp;
-		targetDistance = distanceTemp;
-		std::copy(nodesTemp.begin(), nodesTemp.end(), t_ResultNodes.begin());
+		nodesCountOut = nodesCountTemp;
+		distanceOut = distanceTemp;
+		std::copy(nodesTemp.begin(), nodesTemp.end(), resultNodesOut);
 	});
+}
+
+void GPS::requestTargetPath(CVector destPosn)
+{
+	requestPath(destPosn, targetFuture, targetNodesCount, targetDistance, t_ResultNodes.data());
 }
 
 void GPS::requestMissionPath(CVector destPosn)
 {
-	if (missionFuture.valid() && missionFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
-		return;
-
-	missionFuture = std::async(std::launch::async, [this, destPosn]() {
-		short nodesCountTemp = 0;
-		float distanceTemp = 0.0f;
-		std::array<CNodeAddress, MAX_NODE_POINTS> nodesTemp{};
-
-		this->calculatePath(destPosn, nodesCountTemp, nodesTemp.data(), distanceTemp);
-
-		std::lock_guard<std::mutex> lock(pathMutex);
-		missionNodesCount = nodesCountTemp;
-		missionDistance = distanceTemp;
-		std::copy(nodesTemp.begin(), nodesTemp.end(), m_ResultNodes.begin());
-	});
+	requestPath(destPosn, missionFuture, missionNodesCount, missionDistance, m_ResultNodes.data());
 }
 
 // Events
@@ -104,6 +96,18 @@ void GPS::DrawRadarOverlayHandle()
 	}
 }
 
+tRadarTrace *GPS::getValidTargetTrace()
+{
+	if (!FrontEndMenuManager.m_nTargetBlipIndex)
+		return nullptr;
+
+	tRadarTrace *trace = &CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)];
+	if (trace->m_nCounter != HIWORD(FrontEndMenuManager.m_nTargetBlipIndex) || !trace->m_nBlipDisplay)
+		return nullptr;
+
+	return trace;
+}
+
 void GPS::GameEventHandle()
 {
 	player = FindPlayerPed(0);
@@ -131,25 +135,17 @@ void GPS::GameEventHandle()
 		return;
 	}
 
-	if (FrontEndMenuManager.m_nTargetBlipIndex &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nCounter ==
-			HIWORD(FrontEndMenuManager.m_nTargetBlipIndex) &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nBlipDisplay &&
-		DistanceBetweenPoints(player->GetPosition(),
-							  CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos) <=
-			cfg.DISABLE_PROXIMITY)
+	if (tRadarTrace *trace = getValidTargetTrace();
+		trace && DistanceBetweenPoints(player->GetPosition(), trace->m_vecPos) <= cfg.DISABLE_PROXIMITY)
 	{
 		CRadar::ClearBlip(FrontEndMenuManager.m_nTargetBlipIndex);
 		FrontEndMenuManager.m_nTargetBlipIndex = 0;
 		renderTargetRoute = false;
 	}
 
-	if (FrontEndMenuManager.m_nTargetBlipIndex &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nCounter ==
-			HIWORD(FrontEndMenuManager.m_nTargetBlipIndex) &&
-		CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_nBlipDisplay)
+	if (tRadarTrace *trace = getValidTargetTrace())
 	{
-		targetTracePos = CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos;
+		targetTracePos = trace->m_vecPos;
 		this->requestTargetPath(targetTracePos);
 		renderTargetRoute = true;
 	}
@@ -190,6 +186,27 @@ void GPS::GameEventHandle()
 	}
 }
 
+void GPS::drawDistanceText(CRGBA color, float anchorY, float textYOffset, const CVector &fromPos,
+						   const CVector &toPos)
+{
+	CFont::SetOrientation(ALIGN_CENTER);
+	CFont::SetColor(color);
+	CFont::SetBackground(false, false);
+	CFont::SetWrapx(500.0f);
+	CFont::SetScale(0.3f * static_cast<float>(RsGlobal.maximumWidth) / 640.0f,
+					0.6f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f);
+	CFont::SetFontStyle(FONT_SUBTITLES);
+	CFont::SetProportional(true);
+	CFont::SetDropShadowPosition(1);
+	CFont::SetDropColor(CRGBA(0, 0, 0, 180));
+
+	CVector2D point;
+	CRadar::TransformRadarPointToScreenSpace(point, CVector2D(0.0f, anchorY));
+	CFont::PrintString(
+		point.x, point.y + textYOffset * static_cast<float>(RsGlobal.maximumHeight) / 448.0f,
+		(char *)util::makeDist(DistanceBetweenPoints(fromPos, toPos), cfg.DISTANCE_UNITS).c_str());
+}
+
 void GPS::DrawHudEventHandle()
 {
 	if (!cfg.ENABLE_DISTANCE_TEXT)
@@ -200,48 +217,14 @@ void GPS::DrawHudEventHandle()
 
 	if (renderMissionRoute)
 	{
-		CFont::SetOrientation(ALIGN_CENTER);
-		CFont::SetColor(SetupColor(this->mTrace->m_nColour, this->mTrace->m_bFriendly, cfg));
-		CFont::SetBackground(false, false);
-		CFont::SetWrapx(500.0f);
-		CFont::SetScale(0.3f * static_cast<float>(RsGlobal.maximumWidth) / 640.0f,
-						0.6f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f);
-		CFont::SetFontStyle(FONT_SUBTITLES);
-		CFont::SetProportional(true);
-		CFont::SetDropShadowPosition(1);
-		CFont::SetDropColor(CRGBA(0, 0, 0, 180));
-
-		CVector2D point;
-		CRadar::TransformRadarPointToScreenSpace(point, CVector2D(0.0f, -1.0f));
-		CFont::PrintString(
-			point.x, point.y + 8.0f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f,
-			(char *)util::makeDist(DistanceBetweenPoints(FindPlayerCoors(0), destVec), cfg.DISTANCE_UNITS).c_str());
+		drawDistanceText(SetupColor(this->mTrace->m_nColour, this->mTrace->m_bFriendly, cfg), -1.0f, 8.0f,
+						 FindPlayerCoors(0), destVec);
 	}
 
 	if (renderTargetRoute)
 	{
-		CFont::SetOrientation(ALIGN_CENTER);
-		CFont::SetColor(cfg.GPS_LINE_CLR);
-
-		CFont::SetBackground(false, false);
-		CFont::SetWrapx(500.0f);
-		CFont::SetScale(0.3f * static_cast<float>(RsGlobal.maximumWidth) / 640.0f,
-						0.6f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f);
-		CFont::SetFontStyle(FONT_SUBTITLES);
-		CFont::SetProportional(true);
-		CFont::SetDropShadowPosition(1);
-		CFont::SetDropColor(CRGBA(0, 0, 0, 180));
-
-		CVector2D point;
-		CRadar::TransformRadarPointToScreenSpace(point, CVector2D(0.0f, 1.0f));
-		CFont::PrintString(
-			point.x, point.y - 20.0f * static_cast<float>(RsGlobal.maximumHeight) / 448.0f,
-			(char *)util::makeDist(
-				DistanceBetweenPoints(
-					CVector(player->GetPosition()),
-					CVector(CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos)),
-				cfg.DISTANCE_UNITS)
-				.c_str());
+		drawDistanceText(cfg.GPS_LINE_CLR, 1.0f, -20.0f, CVector(player->GetPosition()),
+						 CVector(CRadar::ms_RadarTrace[LOWORD(FrontEndMenuManager.m_nTargetBlipIndex)].m_vecPos));
 	}
 }
 
