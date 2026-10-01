@@ -4,19 +4,26 @@
 
 namespace util
 {
-	// Deterministically derives a distinct, readable color for a blip color
-	// index that has no configured override. Hues are spread using the
-	// golden ratio conjugate so consecutive indices don't look alike, with
-	// fixed saturation/value so nothing comes out too dark or washed out.
-	// This means a third-party mod's own blip colors still look reasonable
-	// on the GPS line even if its ini never configures them.
-	inline CRGBA HashColorForIndex(unsigned int index)
+	// Deterministically derives a distinct, readable color for a blip
+	// color index outside vanilla's 0-8 range, so a third-party mod's own
+	// blip colors still look reasonable even if nobody ever configures
+	// them. The 6 vanilla-assigned colors (red/yellow/green/cyan/blue/
+	// purple) sit exactly 60 degrees apart on the hue wheel, so hues are
+	// anchored at the midpoints between them (30, 90, ..., 330) via
+	// index % 6 - a generated color is then never near a named/vanilla
+	// one. Saturation is varied too (via a different irrational constant,
+	// keyed off how many times that hue bucket has repeated) so indices
+	// that land in the same bucket are still distinct from each other.
+	inline CRGBA GeneratedColorForIndex(unsigned int index)
 	{
-		constexpr double GOLDEN_RATIO_CONJUGATE = 0.6180339887498949;
-		double hue = std::fmod(index * GOLDEN_RATIO_CONJUGATE, 1.0) * 6.0;
-		constexpr double saturation = 0.75;
+		constexpr double GAP_HUES[6] = {30.0, 90.0, 150.0, 210.0, 270.0, 330.0};
+		double hueDeg = GAP_HUES[index % 6];
+
+		constexpr double SQRT2_MINUS_1 = 0.4142135623730951;
+		double saturation = 0.55 + 0.4 * std::fmod((index / 6 + 1) * SQRT2_MINUS_1, 1.0);
 		constexpr double value = 0.95;
 
+		double hue = hueDeg / 60.0;
 		int hi = static_cast<int>(hue);
 		double f = hue - hi;
 		double p = value * (1.0 - saturation);
@@ -43,6 +50,23 @@ namespace util
 		if (color < 0)
 			return cfg.GPS_LINE_CLR;
 
+		if (color > 8)
+		{
+			// Outside vanilla's 0-8 range entirely - most likely a mod's
+			// own blip color. An explicit "colorN=" override (only
+			// possible when custom colors are enabled) always wins;
+			// otherwise fall back to a generated distinct color, so this
+			// works out of the box even if custom colors were never
+			// configured at all.
+			if (cfg.ENABLE_CUSTOM_CLRS)
+			{
+				auto it = cfg.CUSTOM_COLORS.find(static_cast<unsigned int>(color));
+				if (it != cfg.CUSTOM_COLORS.end())
+					return it->second;
+			}
+			return GeneratedColorForIndex(static_cast<unsigned int>(color));
+		}
+
 		if (cfg.ENABLE_CUSTOM_CLRS)
 		{
 			unsigned int lookupColor = static_cast<unsigned int>(color);
@@ -55,15 +79,8 @@ namespace util
 			if (it != cfg.CUSTOM_COLORS.end())
 				return it->second;
 
-			// Outside vanilla's 0-8 range with no configured override -
-			// most likely a third-party mod's own blip color. Give it a
-			// distinct generated color instead of collapsing every
-			// unconfigured mod color into the same default line color.
-			return (lookupColor > 8) ? HashColorForIndex(lookupColor) : cfg.GPS_LINE_CLR;
-		}
-
-		if (color > 8)
 			return cfg.GPS_LINE_CLR;
+		}
 
 		return CRadar::GetRadarTraceColour(color, 1, friendly);
 	}
